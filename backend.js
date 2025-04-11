@@ -5,6 +5,8 @@ const mySql = require('mysql2');
 require('dotenv').config();
 const bcrypt = require('bcrypt');
 app.use(express.json()); // Middleware to parse JSON bodies
+const cors = require('cors');
+app.use(cors());
 
 // Create MySQL connection
 const db = mySql.createConnection({
@@ -101,14 +103,38 @@ async function deletePlayer(username) {
   });
 
 }
-function getDefinitions(from = 1, nb = 10) {
+function getNDefinitionsFrom(from = 1, nb = 10) {
   const offset = from > 0 ? from - 1 : 0;
-  const query = `SELECT * FROM definitions ORDER BY id LIMIT ?, ?`;
+  const query = `
+  SELECT w.id AS word_id, w.word, d.definition
+  FROM words w
+  LEFT JOIN definitions d ON w.id = d.word_id
+  WHERE w.id IN (
+    SELECT word_ids.id
+    FROM (SELECT id FROM words ORDER BY id LIMIT ?, ?) AS word_ids
+  )
+  ORDER BY w.id
+`;
+
 
   return new Promise((resolve, reject) => {
     db.query(query, [offset, nb], (err, results) => {
       if (err) return reject(err);
-      resolve(results);
+
+      const grouped = {};
+      for (const row of results) {
+        if (!grouped[row.word_id]) {
+          grouped[row.word_id] = {
+            word: row.word,
+            id: row.word_id,
+            "def:": [row.definition]
+          };
+        } else {
+          grouped[row.word_id]["def:"].push(row.definition);
+        }
+      }
+
+      resolve(Object.values(grouped));
     });
   });
 }
@@ -224,14 +250,19 @@ app.get('/admin/top', async (req, res) => {
 
 
 
-app.delete('/admin/delete/joueur/:player', async (req, res) => { const { player } = req.params;
-try {
-  await deletePlayer(player);
-  res.status(200).json({ message: `Player: ${player} deleted successfully` });
-} catch (error) {
-  res.status(500).json({ error: 'Internal server error' });
-}
+app.delete('/admin/delete/joueur/:player', async (req, res) => {
+  const { player } = req.params;
+  try {
+    const result = await deletePlayer(player);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    res.status(200).json({ message: `Player: ${player} deleted successfully` });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
+
  app.delete('/admin/delete/def/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -249,7 +280,7 @@ app.get('/', (req, res) => {
 // 1. /word — defaults: nb = 10, from = 1
 app.get('/word', async (req, res) => {
   try {
-    const definitions = await getDefinitions(1, 10);
+    const definitions = await getNDefinitionsFrom(1, 10);
     res.status(200).json(definitions);
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
@@ -264,7 +295,7 @@ app.get('/word/:nb', async (req, res) => {
   }
 
   try {
-    const definitions = await getDefinitions(1, nb);
+    const definitions = await getNDefinitionsFrom(1, nb);
     res.status(200).json(definitions);
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
@@ -281,13 +312,76 @@ app.get('/word/:nb/:from', async (req, res) => {
   }
 
   try {
-    const definitions = await getDefinitions(from, nb);
+    const definitions = await getNDefinitionsFrom(from, nb);
     res.status(200).json(definitions);
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+function getRandomWord(lang = 'en') {
+  const query = `
+    SELECT d.id AS definition_id, d.definition, d.source, w.word, w.language
+    FROM definitions d
+    JOIN words w ON d.word_id = w.id
+    WHERE w.language = ?
+    ORDER BY RAND()
+    LIMIT 1
+  `;
+
+  return new Promise((resolve, reject) => {
+    db.query(query, [lang], (err, results) => {
+      if (err) return reject(err);
+      if (results.length === 0) return reject(new Error('No definitions found'));
+      resolve(results[0]); // includes word, definition, etc.
+    });
+  });
+}
+
+
+function getRandomWordForDefinition(lang = 'en') {
+  const query = `
+    SELECT DISTINCT w.id, w.word, w.language
+    FROM words w
+    WHERE w.language = ? AND CHAR_LENGTH(w.word) >= 5
+    ORDER BY RAND()
+    LIMIT 1
+  `;
+  return new Promise((resolve, reject) => {
+    db.query(query, [lang], (err, results) => {
+      if (err) return reject(err);
+      if (results.length === 0) return reject(new Error('No suitable word found'));
+      resolve(results[0]);
+    });
+  });
+}
+function getWordRow(word, language) {
+  return new Promise((resolve, reject) => {
+    const query = 'SELECT * FROM words WHERE word = ? AND language = ?';
+    db.query(query, [word, language], (err, results) => {
+      if (err) return reject(err);
+      resolve(results[0]);
+    });
+  });
+}
+function definitionExists(wordId, def) {
+  return new Promise((resolve, reject) => {
+    const query = 'SELECT 1 FROM definitions WHERE word_id = ? AND definition = ?';
+    db.query(query, [wordId, def], (err, results) => {
+      if (err) return reject(err);
+      resolve(results.length > 0);
+    });
+  });
+}
+function insertDefinition(wordId, def, source) {
+  return new Promise((resolve, reject) => {
+    const query = 'INSERT INTO definitions (word_id, definition, source) VALUES (?, ?, ?)';
+    db.query(query, [wordId, def, source], (err, results) => {
+      if (err) return reject(err);
+      resolve(results);
+    });
+  });
+}
 
 
 app.put('/gamers/update/:player', async (req, res) => {
@@ -316,6 +410,121 @@ app.put('/gamers/update/:player', async (req, res) => {
 });
 
 
+// === /jeu/word — No parameters (defaults to en, 60s, 10s)
+app.get('/jeu/word', async (req, res) => {
+  try {
+    const data = await getRandomWord('en');
+    const startingScore = data.word.length * 10;
+
+    res.status(200).json({
+      word: data.word,
+      wordLength: data.word.length,
+      definition: data.definition,
+      startingScore,
+      hintInterval: 10,
+      timeLimit: 60
+    });
+  } catch (error) {
+    console.error('Error fetching game word:', error);
+    res.status(500).json({ error: 'Failed to load game word' });
+  }
+});
+
+// === /jeu/word/:lang — With language only
+app.get('/jeu/word/:lang', async (req, res) => {
+  const { lang } = req.params;
+  try {
+    const data = await getRandomWord(lang);
+    const startingScore = data.word.length * 10;
+
+    res.status(200).json({
+      word: data.word,
+      wordLength: data.word.length,
+      definition: data.definition,
+      startingScore,
+      hintInterval: 10,
+      timeLimit: 60
+    });
+  } catch (error) {
+    console.error('Error fetching game word:', error);
+    res.status(500).json({ error: 'Failed to load game word' });
+  }
+});
+
+// === /jeu/word/:lang/:time/:hint — Full custom
+app.get('/jeu/word/:lang/:time/:hint', async (req, res) => {
+  const { lang, time, hint } = req.params;
+  try {
+    const data = await getRandomWord(lang);
+    const startingScore = data.word.length * 10;
+
+    res.status(200).json({
+      word: data.word,
+      wordLength: data.word.length,
+      definition: data.definition,
+      startingScore,
+      hintInterval: parseInt(hint),
+      timeLimit: parseInt(time)
+    });
+  } catch (error) {
+    console.error('Error fetching game word:', error);
+    res.status(500).json({ error: 'Failed to load game word' });
+  }
+});
+
+app.get('/jeu/def', async (req, res) => {
+  try {
+    const data = await getRandomWordForDefinition('en'); // default lang
+    res.status(200).json({
+      word: data.word,
+      language: data.language
+    });
+  } catch (error) {
+    console.error('Error fetching word to define:', error);
+    res.status(500).json({ error: 'Failed to load word for definition' });
+  }
+});
+app.get('/jeu/def/:lang', async (req, res) => {
+  const { lang } = req.params;
+  try {
+    const data = await getRandomWordForDefinition(lang);
+    res.status(200).json({
+      word: data.word,
+      language: data.language
+    });
+  } catch (error) {
+    console.error('Error fetching word to define:', error);
+    res.status(500).json({ error: 'Failed to load word for definition' });
+  }
+});
+// === POST /jeu/def — submit new definition
+app.post('/jeu/def', async (req, res) => {
+  const { word, definition, language, username } = req.body;
+
+  if (!word || !definition || !language || !username) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const wordRow = await getWordRow(word, language);
+    if (!wordRow) {
+      return res.status(404).json({ error: 'Word not found' });
+    }
+
+    const exists = await definitionExists(wordRow.id, definition);
+    if (exists) {
+      return res.status(409).json({ error: 'Definition already exists' });
+    }
+
+    await insertDefinition(wordRow.id, definition, username);
+    await updatePlayerScore(username, 5); // bonus for contributing
+
+    res.status(201).json({ message: 'Definition added successfully', bonus: 5 });
+  } catch (error) {
+    console.error('Error submitting definition:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // Start the server
 app.listen(port, () => {
