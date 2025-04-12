@@ -7,7 +7,8 @@ const bcrypt = require('bcrypt');
 app.use(express.json()); // Middleware to parse JSON bodies
 const cors = require('cors');
 app.use(cors());
-
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'frontend'))); // Serve static files from the public directory
 // Create MySQL connection
 const db = mySql.createConnection({
   host: process.env.DB_HOST,
@@ -383,7 +384,7 @@ function insertDefinition(wordId, def, source) {
   });
 }
 
-
+// update player score
 app.put('/gamers/update/:player', async (req, res) => {
   const { player } = req.params;
   const { score } = req.body;
@@ -410,10 +411,26 @@ app.put('/gamers/update/:player', async (req, res) => {
 });
 
 
-// === /jeu/word — No parameters (defaults to en, 60s, 10s)
-app.get('/jeu/word', async (req, res) => {
+
+
+// === Serve HTML page for all /jeu/word routes ===
+app.get('/jeu/word/:lang/:time/:hint', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'jeu.html'));
+});
+
+app.get('/jeu/word/:lang', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'jeu.html'));
+});
+
+app.get('/jeu/word', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'jeu.html'));
+});
+
+// === Provide game data as JSON ===
+app.get('/api/word/:lang/:time/:hint', async (req, res) => {
+  const { lang, time, hint } = req.params;
   try {
-    const data = await getRandomWord('en');
+    const data = await getRandomWord(lang);
     const startingScore = data.word.length * 10;
 
     res.status(200).json({
@@ -421,8 +438,8 @@ app.get('/jeu/word', async (req, res) => {
       wordLength: data.word.length,
       definition: data.definition,
       startingScore,
-      hintInterval: 10,
-      timeLimit: 60
+      hintInterval: parseInt(hint),
+      timeLimit: parseInt(time)
     });
   } catch (error) {
     console.error('Error fetching game word:', error);
@@ -430,8 +447,7 @@ app.get('/jeu/word', async (req, res) => {
   }
 });
 
-// === /jeu/word/:lang — With language only
-app.get('/jeu/word/:lang', async (req, res) => {
+app.get('/api/word/:lang', async (req, res) => {
   const { lang } = req.params;
   try {
     const data = await getRandomWord(lang);
@@ -451,11 +467,9 @@ app.get('/jeu/word/:lang', async (req, res) => {
   }
 });
 
-// === /jeu/word/:lang/:time/:hint — Full custom
-app.get('/jeu/word/:lang/:time/:hint', async (req, res) => {
-  const { lang, time, hint } = req.params;
+app.get('/api/word', async (req, res) => {
   try {
-    const data = await getRandomWord(lang);
+    const data = await getRandomWord('en');
     const startingScore = data.word.length * 10;
 
     res.status(200).json({
@@ -463,8 +477,8 @@ app.get('/jeu/word/:lang/:time/:hint', async (req, res) => {
       wordLength: data.word.length,
       definition: data.definition,
       startingScore,
-      hintInterval: parseInt(hint),
-      timeLimit: parseInt(time)
+      hintInterval: 10,
+      timeLimit: 60
     });
   } catch (error) {
     console.error('Error fetching game word:', error);
@@ -522,6 +536,33 @@ app.post('/jeu/def', async (req, res) => {
     res.status(201).json({ message: 'Definition added successfully', bonus: 5 });
   } catch (error) {
     console.error('Error submitting definition:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+app.get('/jeu/suggestions/:lang/:pattern', async (req, res) => {
+  const rawPattern = req.params.pattern.toUpperCase();
+  const lang = req.params.lang.toLowerCase();
+  const mysqlPattern = `^${rawPattern}$`;
+
+  try {
+    const query = `
+      SELECT DISTINCT word
+      FROM words
+      WHERE word REGEXP ? AND language = ?
+      LIMIT 10
+    `;
+
+    db.query(query, [mysqlPattern, lang], (err, results) => {
+      if (err) {
+        console.error('❌ Suggestion error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      const words = results.map(row => row.word.toUpperCase());
+      res.status(200).json({ words });
+    });
+  } catch (err) {
+    console.error('❌ Unexpected error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
