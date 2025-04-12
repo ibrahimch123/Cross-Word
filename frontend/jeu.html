@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Word Guessing Game</title>
+  <script src="/login.js" defer></script>
+  <script src="/word.js" defer></script>
+  <script src="/def.js"></script>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+   <div id="auth-container" style="text-align: center; padding-top: 50px;">
+  <h2 id="auth-title">🔐 Login</h2>
+
+  <form id="auth-form">
+    <input type="text" id="auth-username" placeholder="Username" required /><br>
+    <input type="password" id="auth-password" placeholder="Password" required /><br>
+    <button type="submit" id="auth-button">Login</button>
+  </form>
+
+  <p id="toggle-msg">
+    No account? <a href="#" id="toggle-link">Click to register</a>
+  </p>
+
+  <div class="error" id="auth-error" style="color: red; margin-top: 10px;"></div>
+</div>
+
+      
+
+  <div id="game-container" style="display:none;">
+    <h1>🧠 Word Guessing Game</h1>
+
+    
+    <button onclick="startGame()">Start Game</button>
+    <div id="user-info" style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="welcome-user"></span>
+        <button id="logout-button">Logout</button>
+      </div>
+      
+    <div id="definition-box">
+      <p><strong>Definition:</strong> <span id="definition">--</span></p>
+      <div id="word-display"></div>
+    </div>
+
+    <p>Score: <span id="score">0</span></p>
+    <p>Time left: <span id="timer">0</span>s</p>
+    <div id="hint-icon" style="display: none; cursor: pointer;">💡</div>
+    <p id="message"></p>
+
+    <div id="suggestions" style="display: none; margin-top: 20px; border: 1px solid #ccc; padding: 10px; background: #f9f9f9;">
+      <strong>Suggestions:</strong>
+      <ul id="suggestion-list"></ul>
+    </div>
+  </div>
+  
