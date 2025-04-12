@@ -486,41 +486,41 @@ app.get('/api/word', async (req, res) => {
   }
 });
 
-app.get('/jeu/def', async (req, res) => {
+// === Serve def.html for route: /jeu/def/:lang/:time
+app.get('/jeu/def/:lang/:time', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'jeu.html'));
+});
+
+// === API: GET /api/defword/:lang
+app.get('/api/defword/:lang', async (req, res) => {
+  const lang = req.params.lang || 'en';
   try {
-    const data = await getRandomWordForDefinition('en'); // default lang
+    const data = await getRandomWordForDefinition(lang); // implement this if needed
     res.status(200).json({
       word: data.word,
-      language: data.language
+      language: lang
     });
   } catch (error) {
     console.error('Error fetching word to define:', error);
     res.status(500).json({ error: 'Failed to load word for definition' });
   }
 });
-app.get('/jeu/def/:lang', async (req, res) => {
-  const { lang } = req.params;
-  try {
-    const data = await getRandomWordForDefinition(lang);
-    res.status(200).json({
-      word: data.word,
-      language: data.language
-    });
-  } catch (error) {
-    console.error('Error fetching word to define:', error);
-    res.status(500).json({ error: 'Failed to load word for definition' });
-  }
-});
-// === POST /jeu/def — submit new definition
-app.post('/jeu/def', async (req, res) => {
+
+// === API: POST /api/def — Submit a new definition
+app.post('/api/def', async (req, res) => {
   const { word, definition, language, username } = req.body;
 
+  // Validate inputs
   if (!word || !definition || !language || !username) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
+  if (definition.length < 5 || definition.length > 200) {
+    return res.status(400).json({ error: 'Definition must be between 5 and 200 characters.' });
+  }
+
   try {
-    const wordRow = await getWordRow(word, language);
+    const wordRow = await getWordRow(word, language); // returns word row from DB
     if (!wordRow) {
       return res.status(404).json({ error: 'Word not found' });
     }
@@ -530,8 +530,8 @@ app.post('/jeu/def', async (req, res) => {
       return res.status(409).json({ error: 'Definition already exists' });
     }
 
-    await insertDefinition(wordRow.id, definition, username);
-    await updatePlayerScore(username, 5); // bonus for contributing
+    await insertDefinition(wordRow.id, definition, username); // Save to DB
+    await updatePlayerScore(username, 5); // Give points
 
     res.status(201).json({ message: 'Definition added successfully', bonus: 5 });
   } catch (error) {
@@ -539,31 +539,42 @@ app.post('/jeu/def', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-app.get('/jeu/suggestions/:lang/:pattern', async (req, res) => {
-  const rawPattern = req.params.pattern.toUpperCase();
-  const lang = req.params.lang.toLowerCase();
-  const mysqlPattern = `^${rawPattern}$`;
+
+app.post('/jeu/suggestions/:lang/:pattern', async (req, res) => {
+  const { lang, pattern } = req.params;
+  const { correctWord } = req.body;
+  const regex = `^${pattern}$`;
+
+  if (!correctWord) {
+    return res.status(400).json({ error: "Missing correctWord in body" });
+  }
 
   try {
-    const query = `
-      SELECT DISTINCT word
-      FROM words
-      WHERE word REGEXP ? AND language = ?
-      LIMIT 10
-    `;
+    // 1. Fetch up to 10 suggestions
+    const [rows] = await db.promise().query(
+      `SELECT word FROM words WHERE language = ? AND word REGEXP ? LIMIT 10`,
+      [lang, regex]
+    );
 
-    db.query(query, [mysqlPattern, lang], (err, results) => {
-      if (err) {
-        console.error('❌ Suggestion error:', err);
-        return res.status(500).json({ error: 'Database error' });
-      }
+    let suggestions = rows.map(row => row.word.toUpperCase());
 
-      const words = results.map(row => row.word.toUpperCase());
-      res.status(200).json({ words });
-    });
+    // 2. Check if correct word exists in DB and matches the pattern
+    const [exists] = await db.promise().query(
+      `SELECT word FROM words WHERE language = ? AND word = ? AND word REGEXP ? LIMIT 1`,
+      [lang, correctWord, regex]
+    );
+
+    const correct = correctWord.toUpperCase();
+
+    if (exists.length > 0 && !suggestions.includes(correct)) {
+      const index = Math.floor(Math.random() * (suggestions.length + 1));
+      suggestions.splice(index, 0, correct);
+    }
+
+    res.status(200).json({ words: suggestions });
   } catch (err) {
-    console.error('❌ Unexpected error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error(" Suggestion error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

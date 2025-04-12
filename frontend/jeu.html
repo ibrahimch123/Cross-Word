@@ -5,6 +5,7 @@
   <title>Word Guessing Game</title>
   <script src="/login.js" defer></script>
   <script src="/word.js" defer></script>
+  <script src="/def.js"></script>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -29,13 +30,13 @@
   <div id="game-container" style="display:none;">
     <h1>🧠 Word Guessing Game</h1>
 
-    <label for="lang-select">Language:</label>
-    <select id="lang-select">
-      <option value="en">English</option>
-      <option value="fr">French</option>
-    </select>
+    
     <button onclick="startGame()">Start Game</button>
-
+    <div id="user-info" style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="welcome-user"></span>
+        <button id="logout-button">Logout</button>
+      </div>
+      
     <div id="definition-box">
       <p><strong>Definition:</strong> <span id="definition">--</span></p>
       <div id="word-display"></div>

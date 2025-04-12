@@ -1,3 +1,4 @@
+// === Game State Variables ===
 let fullWord = "";
 let revealed = [];
 let score = 0;
@@ -7,7 +8,9 @@ let timerId;
 let tick = 0;
 let suggestionUsed = false;
 let currentFocusIndex = 0;
+let hasPlayed = false; // Tracks whether the player made a valid move
 
+// === Extract Parameters from URL ===
 function getGameParamsFromURL() {
   const parts = window.location.pathname.split('/');
   return {
@@ -17,6 +20,7 @@ function getGameParamsFromURL() {
   };
 }
 
+// === Render Word Input Boxes ===
 function renderWord() {
   const container = document.getElementById("word-display");
   container.innerHTML = "";
@@ -42,13 +46,15 @@ function renderWord() {
   });
 
   const inputToFocus = document.querySelector(`input[data-index="${currentFocusIndex}"]`);
-  if (inputToFocus && inputToFocus.disabled === false) {
+  if (inputToFocus && !inputToFocus.disabled) {
     inputToFocus.focus();
   }
 }
 
+// === Start a New Game ===
 async function startGame() {
   suggestionUsed = false;
+  hasPlayed = false;
   clearInterval(timerId);
 
   const { lang, time, hint } = getGameParamsFromURL();
@@ -75,6 +81,7 @@ async function startGame() {
   timerId = setInterval(updateTimer, 1000);
 }
 
+// === Countdown Logic and Hint Triggering ===
 function updateTimer() {
   tick++;
   timeLimit--;
@@ -83,6 +90,13 @@ function updateTimer() {
   if (tick % hintInterval === 0) {
     revealRandomLetter();
     score -= 10;
+if (score <= 0) {
+  score = 0;
+  document.getElementById("score").textContent = score;
+  endGameLoss();
+  return;
+}
+
     document.getElementById("score").textContent = score;
     if (!revealed.includes("_")) return;
     if (!suggestionUsed) {
@@ -92,17 +106,19 @@ function updateTimer() {
 
   if (timeLimit <= 0) {
     clearInterval(timerId);
-    document.getElementById("message").textContent = `⏱️ Time's up! The word was: ${fullWord}`;
+    document.getElementById("message").textContent = `Time's up! The word was: ${fullWord}`;
     document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
     updateScore();
   }
 }
 
+// === Handle Character Input by Player ===
 function handleInput(index, input) {
   currentFocusIndex = index;
   const letter = input.value.toUpperCase();
 
   if (letter === fullWord[index] && revealed[index] === "_") {
+    hasPlayed = true;
     revealed[index] = letter;
     score += 5;
     input.value = letter;
@@ -116,6 +132,11 @@ function handleInput(index, input) {
   } else {
     input.value = "";
     score -= 5;
+    if (score <= 0) {
+        score = 0;
+        document.getElementById("score").textContent = score;
+        endGameLoss();
+        return;}
   }
 
   document.getElementById("score").textContent = score;
@@ -125,7 +146,7 @@ function handleInput(index, input) {
     const bonus = Math.floor(timeLimit / 10);
     score += bonus;
     document.getElementById("score").textContent = score;
-    document.getElementById("message").textContent = `🎉 Well done! Final score: ${score}`;
+    document.getElementById("message").textContent = `Well done! Final score: ${score}`;
     document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
     updateScore();
   }
@@ -135,6 +156,7 @@ function handleInput(index, input) {
   }
 }
 
+// === Reveal a Random Letter Automatically ===
 function revealRandomLetter() {
   const hiddenIndexes = revealed.map((c, i) => c === "_" ? i : -1).filter(i => i !== -1);
   if (hiddenIndexes.length === 0) return;
@@ -150,10 +172,9 @@ function revealRandomLetter() {
 
   if (!revealed.includes("_")) {
     clearInterval(timerId);
-    document.getElementById("message").textContent = `❌ You lost! Word was: ${fullWord}`;
+    document.getElementById("message").textContent = `You lost! Word was: ${fullWord}`;
     document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
     updateScore();
-    return;
   }
 
   if (suggestionUsed) {
@@ -161,16 +182,20 @@ function revealRandomLetter() {
   }
 }
 
+// === Fetch and Display Suggestions ===
 function refreshSuggestions() {
-  const lang = document.getElementById("lang-select").value;
+  const lang = getGameParamsFromURL().lang;
   const pattern = revealed.map(c => c === "_" ? "." : c).join("");
 
-  fetch(`/jeu/suggestions/${lang}/${pattern}`)
+  fetch(`/jeu/suggestions/${lang}/${pattern}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ correctWord: fullWord })
+  })
     .then(res => res.json())
     .then(data => {
       const suggestionBox = document.getElementById("suggestions");
       const suggestionList = document.getElementById("suggestion-list");
-
       suggestionList.innerHTML = "";
 
       data.words.forEach(word => {
@@ -178,7 +203,31 @@ function refreshSuggestions() {
         li.textContent = word;
         li.style.cursor = "pointer";
         li.addEventListener("click", () => {
-          document.getElementById("message").textContent = `You clicked: ${word}`;
+          if (word.toUpperCase() === fullWord) {
+            hasPlayed = true;
+            let revealedCount = 0;
+            for (let i = 0; i < fullWord.length; i++) {
+              if (revealed[i] === "_") {
+                revealed[i] = fullWord[i];
+                revealedCount++;
+              }
+            }
+
+            const letterPoints = revealedCount * 5;
+            const timeBonus = Math.floor(timeLimit / 10);
+            score += letterPoints + timeBonus;
+
+            document.getElementById("score").textContent = score;
+            document.getElementById("message").textContent = 
+              `Correct! You earned ${letterPoints} + ${timeBonus} bonus. Final score: ${score}`;
+
+            renderWord();
+            clearInterval(timerId);
+            document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
+            updateScore();
+          } else {
+            document.getElementById("message").textContent = `${word} is incorrect.`;
+          }
         });
         suggestionList.appendChild(li);
       });
@@ -190,24 +239,32 @@ function refreshSuggestions() {
     });
 }
 
+// === Finalize and Submit Score ===
 function updateScore() {
-  const player = localStorage.getItem("player");
-  if (player) {
-    fetch(`/gamers/update/${player}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ score })
-    })
-    .then(res => res.json())
-    .then(data => {
-      console.log("✅ Score submitted:", data.message);
-    })
-    .catch(err => {
-      console.error("❌ Failed to submit score:", err);
-    });
+    if (!hasPlayed) {
+      score = 0;
+      document.getElementById("score").textContent = score;
+    }
+  
+    const player = localStorage.getItem("player");
+    if (player) {
+      fetch(`/gamers/update/${player}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ score })
+      })
+        .then(res => res.json())
+        .then(data => {
+          console.log("Score submitted:", data.message);
+        })
+        .catch(err => {
+          console.error("Failed to submit score:", err);
+        });
+    }
   }
-}
+  
 
+// === Hint Icon Trigger ===
 document.getElementById("hint-icon").addEventListener("click", () => {
   if (suggestionUsed || score < 20) return;
 
