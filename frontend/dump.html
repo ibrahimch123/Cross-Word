@@ -6,57 +6,24 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="/dump.css" />
+    <script src="/dump.js" defer></script>
 </head>
 <body>
-  <h2 style="text-align: center;">📚 Dump of Definitions</h2>
-  <table id="dump-table" class="display" style="width: 90%; margin: auto;">
+  <h2>📚 Dump of Definitions</h2>
+
+  <table id="dump-table" class="display">
     <thead>
       <tr>
+        <th>Lg</th>
+        <th>Src</th>
         <th>Word</th>
-        <th>Definitions</th>
+        <th>Définition</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
 
-  <script>
-    const step = window.location.pathname.split('/').pop();
-  
-    fetch(`/api/dump/${step}`)
-      .then(res => res.json())
-      .then(json => {
-        const tableBody = document.querySelector("#dump-table tbody");
-  
-        json.data.forEach(entry => {
-          const definitions = Array.isArray(entry["def:"])
-            ? entry["def:"].filter(Boolean)
-            : [];
-  
-          const defList = definitions.length
-            ? definitions.map(d => `<li>${d}</li>`).join('')
-            : "<em>No definitions</em>";
-  
-          const row = document.createElement("tr");
-  
-          const wordCell = document.createElement("td");
-          wordCell.textContent = entry.word;
-          row.appendChild(wordCell);
-  
-          const defCell = document.createElement("td");
-          defCell.innerHTML = `<ul>${defList}</ul>`;
-          row.appendChild(defCell);
-  
-          tableBody.appendChild(row);
-        });
-  
-        //  Initialize DataTables after content is ready
-        $('#dump-table').DataTable();
-      })
-      .catch(err => {
-        console.error("Error loading definitions:", err);
-      });
-  </script>
-  
-  
+ 
 </body>
 </html>

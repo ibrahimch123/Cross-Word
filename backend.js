@@ -182,7 +182,7 @@ app.post('/gamers/add/:player/:password', async (req, res) => {
 });
 
 // Get player info
-app.get('/gamers/get/:player', async (req, res) => {
+app.get('/gamers/:player', async (req, res) => {
   const { player } = req.params;
   try {
     const playerData = await getPlayers(
@@ -596,20 +596,44 @@ app.post('/jeu/suggestions/:lang/:pattern', async (req, res) => {
 app.get('/dump/:step', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dump.html'));
 });
-app.get('/api/dump/:step', async (req, res) => {
-  const step = parseInt(req.params.step);
-  if (isNaN(step) || step <= 0) {
-    return res.status(400).json({ error: 'Step must be a positive number' });
-  }
+app.get('/api/dump/:step', (req, res) => {
+  const query = `
+    SELECT 
+      w.id AS word_id, 
+      w.word, 
+      w.language AS lang, 
+      d.definition, 
+      d.source AS src
+    FROM words w
+    LEFT JOIN definitions d ON w.id = d.word_id
+    ORDER BY w.id
+  `;
 
-  try {
-    const data = await getNDefinitionsFrom(1, step); 
-    res.status(200).json(data);
-  } catch (err) {
-    console.error('Dump API error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('Dump API error:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+
+    const grouped = {};
+
+    for (const row of results) {
+      if (!grouped[row.word_id]) {
+        grouped[row.word_id] = {
+          word: row.word,
+          lang: row.lang,
+          src: row.src || "–",
+          def: row.definition ? [row.definition] : []
+        };
+      } else if (row.definition) {
+        grouped[row.word_id].def.push(row.definition);
+      }
+    }
+
+    res.status(200).json(Object.values(grouped));
+  });
 });
+
 app.get('/doc', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'doc.html'));
 });
