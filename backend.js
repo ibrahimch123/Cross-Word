@@ -488,7 +488,7 @@ app.get('/api/word', async (req, res) => {
 
 // === Serve def.html for route: /jeu/def/:lang/:time
 app.get('/jeu/def/:lang/:time', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'jeu.html'));
+  res.sendFile(path.join(__dirname, 'frontend', 'def.html'));
 });
 
 // === API: GET /api/defword/:lang

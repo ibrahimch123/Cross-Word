@@ -1,15 +1,52 @@
 document.addEventListener("DOMContentLoaded", () => {
     const player = localStorage.getItem("player");
     const password = localStorage.getItem("password");
+  
     const gameBox = document.getElementById("game-container");
     const authBox = document.getElementById("auth-container");
+    const welcomeUser = document.getElementById("welcome-user");
   
-    // If already logged in, show game and username
+    // If already logged in
     if (player) {
-      authBox.style.display = "none";
-      gameBox.style.display = "block";
-      document.getElementById("welcome-user").textContent = "Logged in as: " + player;
+      if (authBox) authBox.style.display = "none";
+      if (gameBox) gameBox.style.display = "block";
+      if (welcomeUser) welcomeUser.textContent = "Logged in as: " + player;
     }
+  
+    // Handle logout if logout button is present
+    const logoutBtn = document.getElementById("logout-button");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", async () => {
+        const username = localStorage.getItem("player");
+        const pwd = localStorage.getItem("password");
+  
+        if (!username || !pwd) {
+          alert("Missing login credentials.");
+          return;
+        }
+  
+        try {
+          const res = await fetch(`/gamers/logout/${username}/${pwd}`, {
+            method: "POST"
+          });
+          const data = await res.json();
+  
+          if (res.ok) {
+            localStorage.removeItem("player");
+            localStorage.removeItem("password");
+            location.reload();
+          } else {
+            alert(data.error || "Logout failed.");
+          }
+        } catch (err) {
+          alert("Logout request failed.");
+        }
+      });
+    }
+  
+    // Skip if page has no login form
+    const authForm = document.getElementById("auth-form");
+    if (!authForm) return;
   
     let mode = "login";
   
@@ -45,8 +82,9 @@ document.addEventListener("DOMContentLoaded", () => {
   
     attachToggle();
   
-    document.getElementById("auth-form").addEventListener("submit", async (e) => {
+    authForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+  
       const username = document.getElementById("auth-username").value.trim();
       const pwd = document.getElementById("auth-password").value.trim();
   
@@ -56,66 +94,26 @@ document.addEventListener("DOMContentLoaded", () => {
       }
   
       try {
-        if (mode === "login") {
-          const res = await fetch(`/gamers/login/${username}/${pwd}`, { method: "PUT" });
-          const data = await res.json();
+        const endpoint = mode === "login"
+          ? `/gamers/login/${username}/${pwd}`
+          : `/gamers/add/${username}/${pwd}`;
+        const method = mode === "login" ? "PUT" : "POST";
   
-          if (res.ok) {
-            localStorage.setItem("player", username);
-            localStorage.setItem("password", pwd);
-            authBox.style.display = "none";
-            gameBox.style.display = "block";
-            document.getElementById("welcome-user").textContent = "Logged in as: " + username;
-          } else {
-            error.textContent = data.error || "Login failed.";
-          }
+        const res = await fetch(endpoint, { method });
+        const data = await res.json();
+  
+        if (res.ok) {
+          localStorage.setItem("player", username);
+          localStorage.setItem("password", pwd);
+          if (authBox) authBox.style.display = "none";
+          if (gameBox) gameBox.style.display = "block";
+          if (welcomeUser) welcomeUser.textContent = "Logged in as: " + username;
         } else {
-          const res = await fetch(`/gamers/add/${username}/${pwd}`, { method: "POST" });
-          const data = await res.json();
-  
-          if (res.ok) {
-            localStorage.setItem("player", username);
-            localStorage.setItem("password", pwd);
-            authBox.style.display = "none";
-            gameBox.style.display = "block";
-            document.getElementById("welcome-user").textContent = "Logged in as: " + username;
-          } else {
-            error.textContent = data.error || "Registration failed.";
-          }
+          error.textContent = data.error || "Authentication failed.";
         }
       } catch (err) {
         error.textContent = "Something went wrong. Try again.";
       }
     });
-  
-    const logoutBtn = document.getElementById("logout-button");
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", async () => {
-        const username = localStorage.getItem("player");
-        const pwd = localStorage.getItem("password");
-  
-        if (!username || !pwd) {
-          alert("Missing login credentials.");
-          return;
-        }
-  
-        try {
-          const res = await fetch(`/gamers/logout/${username}/${pwd}`, {
-            method: "POST"
-          });
-          const data = await res.json();
-  
-          if (res.ok) {
-            localStorage.removeItem("player");
-            localStorage.removeItem("password");
-            location.reload();
-          } else {
-            alert(data.error || "Logout failed.");
-          }
-        } catch (err) {
-          alert("Logout request failed.");
-        }
-      });
-    }
   });
   

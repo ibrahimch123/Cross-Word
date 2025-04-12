@@ -1,76 +1,110 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    const isDefRoute = window.location.pathname.startsWith("/jeu/def/");
-    if (!isDefRoute) return;
+    const player = localStorage.getItem("player");
+    const authBox = document.getElementById("auth-container");
+    const gameBox = document.getElementById("define-mode");
   
-    // Hide the game mode UI
-    document.getElementById("game-container").style.display = "none";
-    document.getElementById("define-mode").style.display = "block";
+    if (!player) return; // Let login.js handle login
   
-    const parts = window.location.pathname.split('/');
-    const lang = parts[3] || 'en';
-    const time = parseInt(parts[4]) || 60;
-    const username = localStorage.getItem("player");
+    if (authBox) authBox.style.display = "none";
+    if (gameBox) gameBox.style.display = "block";
   
-    if (!username) {
-      alert("Please log in first.");
-      window.location.href = "/"; // redirect to login/home
-      return;
+    const pathParts = window.location.pathname.split("/");
+    const lang = pathParts[3] || "en";
+    const timeLimit = parseInt(pathParts[4]) || 60;
+  
+    const wordSpan = document.getElementById("def-word");
+    const timerSpan = document.getElementById("def-timer");
+    const form = document.getElementById("def-form");
+    const input = document.getElementById("def-input");
+    const msg = document.getElementById("def-message");
+    const scoreMsg = document.getElementById("def-score");
+  
+    // Display user info
+    const welcomeUser = document.getElementById("welcome-user");
+    if (welcomeUser) welcomeUser.textContent = "Logged in as: " + player;
+  
+    // Logout
+    const logoutBtn = document.getElementById("logout-button");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", () => {
+        localStorage.removeItem("player");
+        location.reload();
+      });
     }
   
-    // Fetch word to define
-    const res = await fetch(`/api/defword/${lang}`);
-    const data = await res.json();
-    const word = data.word;
-    document.getElementById("def-word").textContent = word;
+    let word = "";
+    let remaining = timeLimit;
+    let timer;
   
-    // Timer
-    let remaining = time;
-    const timerEl = document.getElementById("def-timer");
-    const inputEl = document.getElementById("def-input");
-    const formEl = document.getElementById("def-form");
-    const msgEl = document.getElementById("def-message");
-    const scoreEl = document.getElementById("def-score");
+    try {
+      const res = await fetch(`/api/defword/${lang}`);
+      const data = await res.json();
+      word = data.word.toUpperCase();
+      wordSpan.textContent = word;
   
-    const countdown = setInterval(() => {
-      remaining--;
-      timerEl.textContent = remaining;
-      if (remaining <= 0) {
-        clearInterval(countdown);
-        inputEl.disabled = true;
-        msgEl.textContent = "Time's up!";
-      }
-    }, 1000);
+      // Start countdown
+      timer = setInterval(() => {
+        remaining--;
+        timerSpan.textContent = remaining;
+      
+        if (remaining <= 0) {
+            clearInterval(timer);
+            msg.textContent = "Time's up!";
+            input.disabled = true;
+            form.querySelector("button").disabled = true;
+          
+            const replayBtn = document.getElementById("replay-button");
+            if (replayBtn) replayBtn.style.display = "inline-block";
+          }
+          
+      }, 1000);
+      
+    } catch (err) {
+      console.error("Failed to load word:", err);
+      msg.textContent = "Failed to load word.";
+    }
   
-    // Handle definition submission
-    formEl.addEventListener("submit", async (e) => {
+    // Handle submission of definitions
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const def = inputEl.value.trim();
-      msgEl.textContent = "";
-      scoreEl.textContent = "";
+      msg.textContent = "";
+      scoreMsg.textContent = "";
   
-      if (def.length < 5 || def.length > 200) {
-        msgEl.textContent = "Definition must be 5–200 characters.";
+      const definition = input.value.trim();
+  
+      if (definition.length < 5 || definition.length > 200) {
+        msg.textContent = "Definition must be 5–200 characters.";
         return;
       }
   
-      const submitRes = await fetch("/api/def", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          word,
-          definition: def,
-          language: lang,
-          username
-        })
-      });
+      try {
+        const res = await fetch("/api/def", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            word,
+            definition,
+            language: lang,
+            username: player,
+          }),
+        });
   
-      const submitData = await submitRes.json();
-      if (submitRes.ok) {
-        scoreEl.textContent = `+${submitData.bonus} points`;
-        inputEl.value = "";
-      } else {
-        msgEl.textContent = submitData.error;
+        const result = await res.json();
+  
+        if (res.ok) {
+          scoreMsg.textContent = `+${result.bonus} points awarded.`;
+          input.value = "";
+        } else {
+          msg.textContent = result.error || "Failed to submit.";
+        }
+      } catch (err) {
+        msg.textContent = "Error submitting definition.";
       }
     });
   });
-  
+  const replayBtn = document.getElementById("replay-button");
+if (replayBtn) {
+  replayBtn.addEventListener("click", () => {
+    window.location.reload(); // Simple way to restart the game
+  });
+}

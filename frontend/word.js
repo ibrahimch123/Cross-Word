@@ -146,7 +146,7 @@ function handleInput(index, input) {
     const bonus = Math.floor(timeLimit / 10);
     score += bonus;
     document.getElementById("score").textContent = score;
-    document.getElementById("message").textContent = `Well done! Final score: ${score}`;
+    document.getElementById("message").textContent = `Correct! Final score: ${score}`;
     document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
     updateScore();
   }
@@ -219,7 +219,7 @@ function refreshSuggestions() {
 
             document.getElementById("score").textContent = score;
             document.getElementById("message").textContent = 
-              `Correct! You earned ${letterPoints} + ${timeBonus} bonus. Final score: ${score}`;
+              `Correct! Final score: ${score}`;
 
             renderWord();
             clearInterval(timerId);
