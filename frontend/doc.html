@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>API Documentation – Projet 2</title>
+  <link rel="stylesheet" href="/doc.css" />
+</head>
+<body>
+  <h1>📘 Projet 2 – API & Web Routes Documentation</h1>
+
+  <section>
+    <h2>🔐 Authentication & Player Management</h2>
+
+    <div class="endpoint">
+      <span class="method POST">POST</span> <code>/gamers/add/:player/:password</code>
+      <div class="desc">Registers a new player with the given login and password. Fails if player exists.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method PUT">PUT</span> <code>/gamers/login/:player/:password</code>
+      <div class="desc">Logs in the player, validates password, and updates last login date.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method POST">POST</span> <code>/gamers/logout/:player/:password</code>
+      <div class="desc">Logs the player out after verifying the password.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method PUT">PUT</span> <code>/gamers/update/:player</code>
+      <div class="desc">Updates the player's score. <br><strong>Body:</strong> <code>{ "score": 15 }</code></div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/gamers/get/:player</code>
+      <div class="desc">Returns basic info (username, score, last login) of the given player.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>🎮 Word Guessing Game</h2>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/jeu/word[/&lt;lang&gt;/&lt;time&gt;/&lt;hint&gt;]</code>
+      <div class="desc">Serves the word guessing game HTML interface.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/api/word/:lang/:time/:hint</code>
+      <div class="desc">Returns a random word, its definition, starting score, hint interval and time limit.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method POST">POST</span> <code>/jeu/suggestions/:lang/:pattern</code>
+      <div class="desc">Returns a list of word suggestions matching the pattern. <br><strong>Body:</strong> <code>{ "correctWord": "APPLE" }</code></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>✍️ Definition Contribution Game</h2>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/jeu/def/:lang/:time</code>
+      <div class="desc">Serves the definition writing game interface with a timer.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/api/defword/:lang</code>
+      <div class="desc">Returns a random word from the database to define in the selected language.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method POST">POST</span> <code>/api/def</code>
+      <div class="desc">Submits a new user-provided definition. <br><strong>Body:</strong> <code>{ word, definition, language, username }</code></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>📈 Admin Routes</h2>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/admin/top</code> or <code>/admin/top/:N</code>
+      <div class="desc">Returns the top N players ranked by score (default N = 10).</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method DELETE">DELETE</span> <code>/admin/delete/joueur/:player</code>
+      <div class="desc">Deletes a player from the database.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method DELETE">DELETE</span> <code>/admin/delete/def/:id</code>
+      <div class="desc">Deletes a specific definition by its ID.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>📄 Dump & Documentation</h2>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/dump/:step</code>
+      <div class="desc">Serves the HTML page that shows a paginated table of definitions.</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/api/dump/:step</code>
+      <div class="desc">Returns a JSON array of words and their definitions (up to <code>step</code> rows).</div>
+    </div>
+
+    <div class="endpoint">
+      <span class="method GET">GET</span> <code>/doc</code>
+      <div class="desc">This documentation page.</div>
+    </div>
+  </section>
+  <section>
+    <h2>📁 HTML Files Overview</h2>
+  
+    <ul>
+      <li><code>jeu.html</code> — Word guessing game interface, served at <code>/jeu/word</code>.</li>
+      <li><code>def.html</code> — Definition contribution game, served at <code>/jeu/def/:lang/:time</code>.</li>
+      <li><code>dump.html</code> — Table of words + definitions with DataTables, served at <code>/dump/:step</code>.</li>
+      <li><code>doc.html</code> — This documentation page, served at <code>/doc</code>.</li>
+    </ul>
+  </section>
+  
+</body>
+</html>

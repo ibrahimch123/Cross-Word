@@ -1,4 +1,5 @@
 // === Game State Variables ===
+let gameOver = false; // true when game ends
 let fullWord = "";
 let revealed = [];
 let score = 0;
@@ -55,6 +56,7 @@ function renderWord() {
 async function startGame() {
   suggestionUsed = false;
   hasPlayed = false;
+  gameOver = false;
   clearInterval(timerId);
 
   const { lang, time, hint } = getGameParamsFromURL();
@@ -90,12 +92,12 @@ function updateTimer() {
   if (tick % hintInterval === 0) {
     revealRandomLetter();
     score -= 10;
-if (score <= 0) {
-  score = 0;
-  document.getElementById("score").textContent = score;
-  endGameLoss();
-  return;
-}
+    if (score <= 0) {
+      score = 0;
+      document.getElementById("score").textContent = score;
+      gameOver = true;
+      return;
+    }
 
     document.getElementById("score").textContent = score;
     if (!revealed.includes("_")) return;
@@ -106,9 +108,11 @@ if (score <= 0) {
 
   if (timeLimit <= 0) {
     clearInterval(timerId);
+    gameOver = true;
     document.getElementById("message").textContent = `Time's up! The word was: ${fullWord}`;
     document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
     updateScore();
+    editPlayerStats(false); // Update player stats for loss
   }
 }
 
@@ -133,22 +137,26 @@ function handleInput(index, input) {
     input.value = "";
     score -= 5;
     if (score <= 0) {
-        score = 0;
-        document.getElementById("score").textContent = score;
-        endGameLoss();
-        return;}
+      score = 0;
+      document.getElementById("score").textContent = score;
+      gameOver = true;
+      
+      return;
+    }
   }
 
   document.getElementById("score").textContent = score;
 
   if (!revealed.includes("_")) {
     clearInterval(timerId);
+    gameOver = true;
     const bonus = Math.floor(timeLimit / 10);
     score += bonus;
     document.getElementById("score").textContent = score;
     document.getElementById("message").textContent = `Correct! Final score: ${score}`;
     document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
     updateScore();
+    editPlayerStats(true); // Update player stats for win
   }
 
   if (suggestionUsed) {
@@ -172,9 +180,12 @@ function revealRandomLetter() {
 
   if (!revealed.includes("_")) {
     clearInterval(timerId);
+    gameOver = true;
     document.getElementById("message").textContent = `You lost! Word was: ${fullWord}`;
     document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
     updateScore();
+    editPlayerStats(false); // Update player stats for loss
+
   }
 
   if (suggestionUsed) {
@@ -184,6 +195,7 @@ function revealRandomLetter() {
 
 // === Fetch and Display Suggestions ===
 function refreshSuggestions() {
+    gameOver = false;
   const lang = getGameParamsFromURL().lang;
   const pattern = revealed.map(c => c === "_" ? "." : c).join("");
 
@@ -203,8 +215,10 @@ function refreshSuggestions() {
         li.textContent = word;
         li.style.cursor = "pointer";
         li.addEventListener("click", () => {
+          if (gameOver) return;
           if (word.toUpperCase() === fullWord) {
             hasPlayed = true;
+            gameOver = true;
             let revealedCount = 0;
             for (let i = 0; i < fullWord.length; i++) {
               if (revealed[i] === "_") {
@@ -218,13 +232,14 @@ function refreshSuggestions() {
             score += letterPoints + timeBonus;
 
             document.getElementById("score").textContent = score;
-            document.getElementById("message").textContent = 
+            document.getElementById("message").textContent =
               `Correct! Final score: ${score}`;
 
             renderWord();
             clearInterval(timerId);
             document.querySelectorAll(".letter-box").forEach(box => box.disabled = true);
             updateScore();
+            editPlayerStats(true); // Update player stats for win
           } else {
             document.getElementById("message").textContent = `${word} is incorrect.`;
           }
@@ -238,31 +253,47 @@ function refreshSuggestions() {
       console.error("Error fetching suggestions:", err);
     });
 }
-
-// === Finalize and Submit Score ===
-function updateScore() {
-    if (!hasPlayed) {
-      score = 0;
-      document.getElementById("score").textContent = score;
-    }
-  
+function editPlayerStats(win) {
     const player = localStorage.getItem("player");
-    if (player) {
-      fetch(`/gamers/update/${player}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ score })
+    if (!player) return;
+  
+    const won = win ? 1 : 0;
+  
+    fetch(`/gamers/stats/${player}/${won}`, {
+      method: "PUT"
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Player stats updated:", data.message || data);
       })
-        .then(res => res.json())
-        .then(data => {
-          console.log("Score submitted:", data.message);
-        })
-        .catch(err => {
-          console.error("Failed to submit score:", err);
-        });
-    }
+      .catch(err => {
+        console.error("Failed to update player stats:", err);
+      });
   }
   
+// === Finalize and Submit Score ===
+function updateScore() {
+  if (!hasPlayed) {
+    score = 0;
+    document.getElementById("score").textContent = score;
+  }
+
+  const player = localStorage.getItem("player");
+  if (player) {
+    fetch(`/gamers/update/${player}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ score })
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Score submitted:", data.message);
+      })
+      .catch(err => {
+        console.error("Failed to submit score:", err);
+      });
+  }
+}
 
 // === Hint Icon Trigger ===
 document.getElementById("hint-icon").addEventListener("click", () => {

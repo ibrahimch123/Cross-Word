@@ -65,6 +65,22 @@ async function getPlayers(fields = [], filters = {}) {
     });
   });
 }
+// Update game stats for a player
+async function updateGameStats(username, won = 0) {
+  const query = `
+    UPDATE players
+    SET gamesPlayed = gamesPlayed + 1,
+        gamesWon = gamesWon + ?
+    WHERE username = ?
+  `;
+
+  return new Promise((resolve, reject) => {
+    db.query(query, [won ? 1 : 0, username], (err, results) => {
+      if (err) return reject(err);
+      resolve(results);
+    });
+  });
+}
 
 // Update player values
 async function updatePlayer(filters = {}, updates = {}) {
@@ -575,6 +591,47 @@ app.post('/jeu/suggestions/:lang/:pattern', async (req, res) => {
   } catch (err) {
     console.error(" Suggestion error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+app.get('/dump/:step', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'dump.html'));
+});
+app.get('/api/dump/:step', async (req, res) => {
+  const step = parseInt(req.params.step);
+  if (isNaN(step) || step <= 0) {
+    return res.status(400).json({ error: 'Step must be a positive number' });
+  }
+
+  try {
+    const data = await getNDefinitionsFrom(1, step); 
+    res.status(200).json(data);
+  } catch (err) {
+    console.error('Dump API error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+app.get('/doc', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'doc.html'));
+});
+//endpoint for updating player stats
+app.put('/gamers/stats/:username/:won', async (req, res) => {
+  const { username, won } = req.params;
+  const winFlag = parseInt(won);
+
+  if (![0, 1].includes(winFlag)) {
+    return res.status(400).json({ error: "Won must be 0 or 1." });
+  }
+
+  try {
+    const result = await updateGameStats(username, winFlag);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Player not found.' });
+    }
+
+    res.status(200).json({ message: 'Game stats updated.' });
+  } catch (error) {
+    console.error('Failed to update stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
