@@ -1,7 +1,7 @@
 // Extract 'step' from URL to use as initial page length
 const step = parseInt(window.location.pathname.split('/').pop()) || 10;
 
-fetch(`/api/dump/all`) // now fetching the full dataset
+fetch(`/api/dump/${step}`) // now fetching the full dataset
   .then(res => res.json())
   .then(data => {
     const tableBody = document.querySelector("#dump-table tbody");
