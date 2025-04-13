@@ -596,6 +596,8 @@ app.post('/jeu/suggestions/:lang/:pattern', async (req, res) => {
 app.get('/dump/:step', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dump.html'));
 });
+app.get('/dump', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'dump.html'));})
 app.get('/api/dump/:step', (req, res) => {
   const query = `
     SELECT 
