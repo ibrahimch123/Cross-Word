@@ -506,7 +506,9 @@ app.get('/api/word', async (req, res) => {
 app.get('/jeu/def/:lang/:time', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'def.html'));
 });
-
+app.get('/jeu/def/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'def.html'));
+});
 // === API: GET /api/defword/:lang
 app.get('/api/defword/:lang', async (req, res) => {
   const lang = req.params.lang || 'en';
