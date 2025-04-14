@@ -513,7 +513,7 @@ app.post('/jeu/suggestions/:lang/:pattern', async (req, res) => {
 
   try {
     // 1. Fetch up to 10 suggestions
-    const [rows] = await db.promise().query(
+    const [rows] = await db.query(
       `SELECT word FROM words WHERE language = ? AND word REGEXP ? LIMIT 10`,
       [lang, regex]
     );
@@ -521,7 +521,7 @@ app.post('/jeu/suggestions/:lang/:pattern', async (req, res) => {
     let suggestions = rows.map(row => row.word.toUpperCase());
 
     // 2. Check if correct word exists in DB and matches the pattern
-    const [exists] = await db.promise().query(
+    const [exists] = await db.query(
       `SELECT word FROM words WHERE language = ? AND word = ? AND word REGEXP ? LIMIT 1`,
       [lang, correctWord, regex]
     );
