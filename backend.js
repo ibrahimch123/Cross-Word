@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
 const port = 3000;
-const mySql = require('mysql2');
+const mySql = require('mysql2/promise');
 require('dotenv').config();
 const bcrypt = require('bcrypt');
 app.use(express.json()); // Middleware to parse JSON bodies
@@ -10,39 +10,29 @@ app.use(cors());
 const path = require('path');
 app.use(express.static(path.join(__dirname, 'frontend'))); // Serve static files from the public directory
 // Create MySQL connection
-const db = mySql.createConnection({
+const db = mySql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 });
 
-// Connect to the database
-db.connect((err) => {
-  if (err) {
-    console.error('Database connection failed:', err.stack);
-    return;
-  }
-  console.log('Connected to MySQL database.');
-});
+
 async function getTopN(N) {
-  const query = `SELECT username, score FROM players ORDER BY score DESC LIMIT ${N};`;
-  return new Promise((resolve, reject) => {
-    db.query(query, [N], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
+  const query = 'SELECT username, score FROM players ORDER BY score DESC LIMIT ?';
+  const [results] = await db.query(query, [N]);
+  return results;
 }
+
+// Add a player
 // Add a player
 async function addPlayer(username, password) {
   const query = 'INSERT INTO players (username, password) VALUES (?, ?)';
-  return new Promise((resolve, reject) => {
-    db.query(query, [username, password], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
+  const [results] = await db.query(query, [username, password]);
+  return results;
 }
 
 // Get players with selected fields and filters
@@ -52,34 +42,20 @@ async function getPlayers(fields = [], filters = {}) {
   const whereClause = filterKeys.length > 0
     ? 'WHERE ' + filterKeys.map(key => `${key} = ?`).join(' AND ')
     : '';
-
   const query = `SELECT ${selectFields} FROM players ${whereClause}`;
-
-  return new Promise((resolve, reject) => {
-    db.query(query, Object.values(filters), (err, results) => {
-      if (err) {
-        console.error('Error fetching players:', err);
-        return reject(err);
-      }
-      resolve(results);
-    });
-  });
+  const [results] = await db.query(query, Object.values(filters));
+  return results;
 }
+
 // Update game stats for a player
 async function updateGameStats(username, won = 0) {
   const query = `
     UPDATE players
     SET gamesPlayed = gamesPlayed + 1,
         gamesWon = gamesWon + ?
-    WHERE username = ?
-  `;
-
-  return new Promise((resolve, reject) => {
-    db.query(query, [won ? 1 : 0, username], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
+    WHERE username = ?`;
+  const [results] = await db.query(query, [won ? 1 : 0, username]);
+  return results;
 }
 
 // Update player values
@@ -87,84 +63,65 @@ async function updatePlayer(filters = {}, updates = {}) {
   const filterKeys = Object.keys(filters).map(key => `${key} = ?`).join(' AND ');
   const updateKeys = Object.keys(updates).map(key => `${key} = ?`).join(', ');
   const query = `UPDATE players SET ${updateKeys} WHERE ${filterKeys}`;
-
-  return new Promise((resolve, reject) => {
-    db.query(query, [...Object.values(updates), ...Object.values(filters)], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
+  const [results] = await db.query(query, [...Object.values(updates), ...Object.values(filters)]);
+  return results;
 }
+
+// Update player score
 async function updatePlayerScore(player, scoreToAdd) {
   if (typeof scoreToAdd !== 'number') {
     throw new Error('scoreToAdd must be a number');
   }
-
   const query = `UPDATE players SET score = score + ? WHERE username = ?`;
-
-  return new Promise((resolve, reject) => {
-    db.query(query, [scoreToAdd, player], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
+  const [results] = await db.query(query, [scoreToAdd, player]);
+  return results;
 }
 
+// Delete a player
 async function deletePlayer(username) {
   const query = 'DELETE FROM players WHERE username = ?';
-  return new Promise((resolve, reject) => {
-    db.query(query, [username], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
-
+  const [results] = await db.query(query, [username]);
+  return results;
 }
-function getNDefinitionsFrom(from = 1, nb = 10) {
+
+// Get definitions with pagination
+async function getNDefinitionsFrom(from = 1, nb = 10) {
   const offset = from > 0 ? from - 1 : 0;
   const query = `
-  SELECT w.id AS word_id, w.word, d.definition
-  FROM words w
-  LEFT JOIN definitions d ON w.id = d.word_id
-  WHERE w.id IN (
-    SELECT word_ids.id
-    FROM (SELECT id FROM words ORDER BY id LIMIT ?, ?) AS word_ids
-  )
-  ORDER BY w.id
-`;
+    SELECT w.id AS word_id, w.word, d.definition
+    FROM words w
+    LEFT JOIN definitions d ON w.id = d.word_id
+    WHERE w.id IN (
+      SELECT word_ids.id
+      FROM (SELECT id FROM words ORDER BY id LIMIT ?, ?) AS word_ids
+    )
+    ORDER BY w.id`;
 
+  const [results] = await db.query(query, [offset, nb]);
 
-  return new Promise((resolve, reject) => {
-    db.query(query, [offset, nb], (err, results) => {
-      if (err) return reject(err);
+  const grouped = {};
+  for (const row of results) {
+    if (!grouped[row.word_id]) {
+      grouped[row.word_id] = {
+        word: row.word,
+        id: row.word_id,
+        "def:": [row.definition]
+      };
+    } else {
+      grouped[row.word_id]["def:"].push(row.definition);
+    }
+  }
 
-      const grouped = {};
-      for (const row of results) {
-        if (!grouped[row.word_id]) {
-          grouped[row.word_id] = {
-            word: row.word,
-            id: row.word_id,
-            "def:": [row.definition]
-          };
-        } else {
-          grouped[row.word_id]["def:"].push(row.definition);
-        }
-      }
-
-      resolve(Object.values(grouped));
-    });
-  });
+  return Object.values(grouped);
 }
 
+// Delete a definition
 async function deleteDef(id) {
   const query = 'DELETE FROM definitions WHERE id = ?';
-  return new Promise((resolve, reject) => {
-    db.query(query, [id], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
+  const [results] = await db.query(query, [id]);
+  return results;
 }
+
 // Register player
 app.post('/gamers/add/:player/:password', async (req, res) => {
   const { player, password } = req.params;
@@ -336,7 +293,8 @@ app.get('/word/:nb/:from', async (req, res) => {
   }
 });
 
-function getRandomWord(lang = 'en') {
+// Get a random word with a definition
+async function getRandomWord(lang = 'en') {
   const query = `
     SELECT d.id AS definition_id, d.definition, d.source, w.word, w.language
     FROM definitions d
@@ -345,18 +303,13 @@ function getRandomWord(lang = 'en') {
     ORDER BY RAND()
     LIMIT 1
   `;
-
-  return new Promise((resolve, reject) => {
-    db.query(query, [lang], (err, results) => {
-      if (err) return reject(err);
-      if (results.length === 0) return reject(new Error('No definitions found'));
-      resolve(results[0]); // includes word, definition, etc.
-    });
-  });
+  const [results] = await db.query(query, [lang]);
+  if (results.length === 0) throw new Error('No definitions found');
+  return results[0];
 }
 
-
-function getRandomWordForDefinition(lang = 'en') {
+// Get a random word (min 5 chars) for definition creation
+async function getRandomWordForDefinition(lang = 'en') {
   const query = `
     SELECT DISTINCT w.id, w.word, w.language
     FROM words w
@@ -364,41 +317,32 @@ function getRandomWordForDefinition(lang = 'en') {
     ORDER BY RAND()
     LIMIT 1
   `;
-  return new Promise((resolve, reject) => {
-    db.query(query, [lang], (err, results) => {
-      if (err) return reject(err);
-      if (results.length === 0) return reject(new Error('No suitable word found'));
-      resolve(results[0]);
-    });
-  });
+  const [results] = await db.query(query, [lang]);
+  if (results.length === 0) throw new Error('No suitable word found');
+  return results[0];
 }
-function getWordRow(word, language) {
-  return new Promise((resolve, reject) => {
-    const query = 'SELECT * FROM words WHERE word = ? AND language = ?';
-    db.query(query, [word, language], (err, results) => {
-      if (err) return reject(err);
-      resolve(results[0]);
-    });
-  });
+
+// Get a specific word row
+async function getWordRow(word, language) {
+  const query = 'SELECT * FROM words WHERE word = ? AND language = ?';
+  const [results] = await db.query(query, [word, language]);
+  return results[0];
 }
-function definitionExists(wordId, def) {
-  return new Promise((resolve, reject) => {
-    const query = 'SELECT 1 FROM definitions WHERE word_id = ? AND definition = ?';
-    db.query(query, [wordId, def], (err, results) => {
-      if (err) return reject(err);
-      resolve(results.length > 0);
-    });
-  });
+
+// Check if a definition already exists
+async function definitionExists(wordId, def) {
+  const query = 'SELECT 1 FROM definitions WHERE word_id = ? AND definition = ?';
+  const [results] = await db.query(query, [wordId, def]);
+  return results.length > 0;
 }
-function insertDefinition(wordId, def, source) {
-  return new Promise((resolve, reject) => {
-    const query = 'INSERT INTO definitions (word_id, definition, source) VALUES (?, ?, ?)';
-    db.query(query, [wordId, def, source], (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
+
+// Insert a new definition
+async function insertDefinition(wordId, def, source) {
+  const query = 'INSERT INTO definitions (word_id, definition, source) VALUES (?, ?, ?)';
+  const [results] = await db.query(query, [wordId, def, source]);
+  return results;
 }
+
 
 // update player score
 app.put('/gamers/update/:player', async (req, res) => {
@@ -600,43 +544,43 @@ app.get('/dump/:step', (req, res) => {
 });
 app.get('/dump', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dump.html'));})
-app.get('/api/dump/:step', (req, res) => {
-  const query = `
-    SELECT 
-      w.id AS word_id, 
-      w.word, 
-      w.language AS lang, 
-      d.definition, 
-      d.source AS src
-    FROM words w
-    LEFT JOIN definitions d ON w.id = d.word_id
-    ORDER BY w.id
-  `;
-
-  db.query(query, (err, results) => {
-    if (err) {
-      console.error('Dump API error:', err);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
-
-    const grouped = {};
-
-    for (const row of results) {
-      if (!grouped[row.word_id]) {
-        grouped[row.word_id] = {
-          word: row.word,
-          lang: row.lang,
-          src: row.src || "–",
-          def: row.definition ? [row.definition] : []
-        };
-      } else if (row.definition) {
-        grouped[row.word_id].def.push(row.definition);
+  app.get('/api/dump/:step', async (req, res) => {
+    const query = `
+      SELECT 
+        w.id AS word_id, 
+        w.word, 
+        w.language AS lang, 
+        d.definition, 
+        d.source AS src
+      FROM words w
+      LEFT JOIN definitions d ON w.id = d.word_id
+      ORDER BY w.id
+    `;
+  
+    try {
+      const [results] = await db.query(query);
+  
+      const grouped = {};
+      for (const row of results) {
+        if (!grouped[row.word_id]) {
+          grouped[row.word_id] = {
+            word: row.word,
+            lang: row.lang,
+            src: row.src || "–",
+            def: row.definition ? [row.definition] : []
+          };
+        } else if (row.definition) {
+          grouped[row.word_id].def.push(row.definition);
+        }
       }
+  
+      res.status(200).json(Object.values(grouped));
+    } catch (err) {
+      console.error('Dump API error:', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
-
-    res.status(200).json(Object.values(grouped));
   });
-});
+  
 
 app.get('/doc', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'doc.html'));
