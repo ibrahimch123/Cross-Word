@@ -506,7 +506,9 @@ app.get('/api/word', async (req, res) => {
 app.get('/jeu/def/:lang/:time', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'def.html'));
 });
-
+app.get('/jeu/def/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'def.html'));
+});
 // === API: GET /api/defword/:lang
 app.get('/api/defword/:lang', async (req, res) => {
   const lang = req.params.lang || 'en';
@@ -596,6 +598,8 @@ app.post('/jeu/suggestions/:lang/:pattern', async (req, res) => {
 app.get('/dump/:step', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dump.html'));
 });
+app.get('/dump', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'dump.html'));})
 app.get('/api/dump/:step', (req, res) => {
   const query = `
     SELECT 
