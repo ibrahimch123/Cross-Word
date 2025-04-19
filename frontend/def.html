@@ -10,18 +10,22 @@
 <body>
   <!-- Login Form -->
   <div id="auth-container" style="text-align: center; padding-top: 50px;">
-    <h2 id="auth-title">Login</h2>
+    <h2 id="auth-title">🔐 Login</h2>
     <form id="auth-form">
       <input type="text" id="auth-username" placeholder="Username" required /><br>
       <input type="password" id="auth-password" placeholder="Password" required /><br>
       <button type="submit" id="auth-button">Login</button>
     </form>
-    <p id="toggle-msg"></p>
+    <p id="toggle-msg">
+      No account? <a href="#" id="toggle-link">Click to register</a>
+    </p>
     <div class="error" id="auth-error" style="color: red; margin-top: 10px;"></div>
   </div>
 
   <!-- Definition Game -->
-  <div id="define-mode" style="display: none; text-align: center; padding-top: 20px;">
+ <!-- Definition Game Container -->
+<div id="game-container" style="display: none;">
+  <div id="define-mode" style="text-align: center; padding-top: 20px;">
     <div id="user-info" style="display: flex; justify-content: space-between; align-items: center; padding: 0 30px;">
       <span id="welcome-user"></span>
       <button id="logout-button">Logout</button>
@@ -35,10 +39,11 @@
       <textarea id="def-input" placeholder="Type your definition..." rows="4" cols="50" style="width: 60%;"></textarea><br><br>
       <button type="submit">Submit Definition</button>
     </form>
-    <button id="replay-button" style="display: none; margin-top: 20px;">🔄 Replay</button>
+    <button id="start-button" style="margin-top: 20px;">▶️ Start Game</button>
 
     <p id="def-message" style="color: red;"></p>
     <p id="def-score" style="color: green;"></p>
+  </div>
   </div>
 </body>
 </html>

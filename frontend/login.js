@@ -17,32 +17,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const logoutBtn = document.getElementById("logout-button");
     if (logoutBtn) {
       logoutBtn.addEventListener("click", async () => {
-        const username = localStorage.getItem("player");
-        const pwd = localStorage.getItem("password");
-  
-        if (!username || !pwd) {
-          alert("Missing login credentials.");
-          return;
-        }
-  
         try {
-          const res = await fetch(`/gamers/logout/${username}/${pwd}`, {
-            method: "POST"
-          });
-          const data = await res.json();
-  
-          if (res.ok) {
-            localStorage.removeItem("player");
-            localStorage.removeItem("password");
-            location.reload();
-          } else {
-            alert(data.error || "Logout failed.");
+          const username = localStorage.getItem("player");
+          const pwd = localStorage.getItem("password");
+    
+          if (username && pwd) {
+            await fetch(`/gamers/logout/${username}/${pwd}`, {
+              method: "POST"
+            });
           }
         } catch (err) {
-          alert("Logout request failed.");
+          console.warn("Logout request failed.");
+        } finally {
+          // Always clear session and reload, regardless of fetch result
+          localStorage.removeItem("player");
+          localStorage.removeItem("password");
+          location.reload();
         }
       });
     }
+    
   
     // Skip if page has no login form
     const authForm = document.getElementById("auth-form");
